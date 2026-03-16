@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { autoTable } from 'jspdf-autotable';
+import { jsPDF } from 'jspdf';
 
 type WorkLog = {
   id: number;
@@ -27,6 +29,21 @@ export default function HomePage() {
   const [entries, setEntries] = useState<WorkLog[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(true);
   const [selectedClient, setSelectedClient] = useState('');
+  const [clientRates, setClientRates] = useState<Record<string, number>>({});
+  const [clientsData, setClientsData] = useState<
+    Record<
+      string,
+      {
+        hourly_rate: number;
+        address_line_1: string | null;
+        address_line_2: string | null;
+        city: string | null;
+        state: string | null;
+        zip: string | null;
+        country: string | null;
+      }
+    >
+  >({});
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
@@ -50,12 +67,6 @@ export default function HomePage() {
 
   const invoiceClient = selectedClient || clientNames[0] || '';
 
-  const clientRates: Record<string, number> = {
-    CNDD: 30,
-    RASA: 50,
-    KabanovLab: 30,
-  };
-
   const invoiceEntries = currentMonthEntries.filter(
     (entry) => entry.client === invoiceClient,
   );
@@ -71,7 +82,59 @@ export default function HomePage() {
   });
 
   const invoiceRate = clientRates[invoiceClient] || 0;
+  const selectedClientData = clientsData[invoiceClient] || {
+    hourly_rate: 0,
+    address_line_1: null,
+    address_line_2: null,
+    city: null,
+    state: null,
+    zip: null,
+    country: null,
+  };
   const invoiceTotalAmount = invoiceTotalHours * invoiceRate;
+  const invoiceDate = new Date().toLocaleDateString('en-US');
+
+  const invoiceNumber = `INV-${new Date().getFullYear()}-${String(
+    new Date().getMonth() + 1,
+  ).padStart(2, '0')}-${invoiceClient.replace(/\s+/g, '-').toUpperCase()}`;
+
+  const senderInfo = {
+    name: 'Tatiana Grigorieva',
+    address_line_1: '85420 Dudley',
+    address_line_2: '',
+    city: 'Chapel Hill',
+    state: 'NC',
+    zip: '27517',
+    country: 'USA',
+    email: 'tsg1204@gmail.com',
+  };
+
+  const invoiceData = {
+    sender: senderInfo,
+    client: {
+      name: invoiceClient,
+      address_line_1: selectedClientData.address_line_1,
+      address_line_2: selectedClientData.address_line_2,
+      city: selectedClientData.city,
+      state: selectedClientData.state,
+      zip: selectedClientData.zip,
+      country: selectedClientData.country,
+    },
+    period: invoicePeriod,
+    entries: invoiceEntries,
+    totalHours: invoiceTotalHours,
+    rate: invoiceRate,
+    totalAmount: invoiceTotalAmount,
+    date: invoiceDate,
+    number: invoiceNumber,
+  };
+
+  function formatCurrency(amount: number) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(amount);
+  }
 
   async function loadEntries() {
     const { data, error } = await supabase
@@ -88,6 +151,51 @@ export default function HomePage() {
 
     setEntries(data || []);
     setLoadingEntries(false);
+  }
+
+  async function loadClients() {
+    const { data, error } = await supabase
+      .from('clients')
+      .select(
+        'name, hourly_rate, address_line_1, address_line_2, city, state, zip, country',
+      );
+
+    if (error) {
+      setMessage(`Error loading clients: ${error.message}`);
+      return;
+    }
+
+    const rates: Record<string, number> = {};
+    const clientDetails: Record<
+      string,
+      {
+        hourly_rate: number;
+        address_line_1: string | null;
+        address_line_2: string | null;
+        city: string | null;
+        state: string | null;
+        zip: string | null;
+        country: string | null;
+      }
+    > = {};
+
+    data?.forEach((client) => {
+      const rate = Number(client.hourly_rate);
+
+      rates[client.name] = rate;
+      clientDetails[client.name] = {
+        hourly_rate: rate,
+        address_line_1: client.address_line_1,
+        address_line_2: client.address_line_2,
+        city: client.city,
+        state: client.state,
+        zip: client.zip,
+        country: client.country,
+      };
+    });
+
+    setClientRates(rates);
+    setClientsData(clientDetails);
   }
 
   useEffect(() => {
@@ -108,6 +216,7 @@ export default function HomePage() {
         setEntries(data || []);
       }
 
+      await loadClients();
       setLoadingEntries(false);
     }
 
@@ -148,6 +257,104 @@ export default function HomePage() {
     setLoadingEntries(true);
     await loadEntries();
     setMessage('Entry saved successfully.');
+  }
+
+  function generateInvoicePdf() {
+    const doc = new jsPDF();
+
+    doc.setFontSize(18);
+    doc.text('Invoice', 14, 20);
+
+    doc.setFontSize(11);
+    doc.text(invoiceData.sender.name, 14, 32);
+    doc.text(invoiceData.sender.address_line_1, 14, 38);
+
+    if (invoiceData.sender.address_line_2) {
+      doc.text(invoiceData.sender.address_line_2, 14, 44);
+    }
+
+    doc.text(
+      `${invoiceData.sender.city}, ${invoiceData.sender.state} ${invoiceData.sender.zip}`,
+      14,
+      invoiceData.sender.address_line_2 ? 50 : 44,
+    );
+    doc.text(
+      invoiceData.sender.country,
+      14,
+      invoiceData.sender.address_line_2 ? 56 : 50,
+    );
+    doc.text(
+      invoiceData.sender.email,
+      14,
+      invoiceData.sender.address_line_2 ? 62 : 56,
+    );
+
+    doc.text(`Bill To:`, 140, 32);
+    doc.text(invoiceData.client.name || '', 140, 38);
+
+    let clientY = 44;
+
+    if (invoiceData.client.address_line_1) {
+      doc.text(invoiceData.client.address_line_1, 140, clientY);
+      clientY += 6;
+    }
+
+    if (invoiceData.client.address_line_2) {
+      doc.text(invoiceData.client.address_line_2, 140, clientY);
+      clientY += 6;
+    }
+
+    const clientCityLine = [
+      invoiceData.client.city,
+      invoiceData.client.state,
+      invoiceData.client.zip,
+    ]
+      .filter(Boolean)
+      .join(', ')
+      .replace(', ,', ',');
+
+    if (clientCityLine) {
+      doc.text(clientCityLine, 140, clientY);
+      clientY += 6;
+    }
+
+    if (invoiceData.client.country) {
+      doc.text(invoiceData.client.country, 140, clientY);
+    }
+
+    doc.text(`Invoice Number: ${invoiceData.number}`, 14, 76);
+    doc.text(`Invoice Date: ${invoiceData.date}`, 14, 84);
+    doc.text(`Billing Period: ${invoiceData.period}`, 14, 92);
+    doc.text(`Hourly Rate: ${formatCurrency(invoiceData.rate)}`, 14, 100);
+    doc.text(`Total Hours: ${invoiceData.totalHours.toFixed(2)}`, 14, 108);
+    doc.text(
+      `Invoice Total: ${formatCurrency(invoiceData.totalAmount)}`,
+      14,
+      116,
+    );
+
+    autoTable(doc, {
+      startY: 126,
+      head: [['Date', 'Task', 'Hours', 'Notes']],
+      body: invoiceData.entries.map((entry) => [
+        entry.work_date,
+        entry.task_description,
+        Number(entry.hours).toFixed(2),
+        entry.notes || '',
+      ]),
+    });
+
+    const safeClientName = (invoiceData.client.name || 'invoice')
+      .replace(/\s+/g, '-')
+      .replace(/[^A-Z0-9\-]/gi, '')
+      .toLowerCase();
+
+    const safePeriod = invoiceData.period
+      .replace(/\s+/g, '-')
+      .replace(/[^A-Z0-9\-]/gi, '')
+      .toLowerCase();
+
+    doc.save(`${safeClientName}-${safePeriod}-${invoiceData.number}.pdf`);
   }
 
   return (
@@ -313,18 +520,6 @@ export default function HomePage() {
                         </span>{' '}
                         {invoiceTotalHours.toFixed(2)}
                       </p>
-                      <p>
-                        <span className="font-medium text-black">
-                          Hourly Rate:
-                        </span>{' '}
-                        ${invoiceRate.toFixed(2)}
-                      </p>
-                      <p>
-                        <span className="font-medium text-black">
-                          Invoice Total:
-                        </span>{' '}
-                        ${invoiceTotalAmount.toFixed(2)}
-                      </p>
                     </div>
                   </div>
 
@@ -382,6 +577,15 @@ export default function HomePage() {
                         {invoiceTotalAmount.toFixed(2)}
                       </p>
                     </div>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={generateInvoicePdf}
+                      className="rounded-lg bg-black px-5 py-3 text-white"
+                    >
+                      Generate PDF
+                    </button>
                   </div>
                 </div>
               </div>
