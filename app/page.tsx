@@ -573,7 +573,7 @@ export default function HomePage() {
                 className="w-full rounded-lg border border-gray-300 p-3 text-black"
               />
             </div>
-            <div>
+            <div className="mt-4">
               <label className="mb-1 block text-sm font-medium text-black">
                 Sender name
               </label>
@@ -598,7 +598,7 @@ export default function HomePage() {
                 className="w-full rounded-lg border border-gray-300 p-3 text-black"
               />
             </div>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end">
               <div>
                 <label className="mb-1 block text-sm font-medium text-black">
                   Daily reminder time
@@ -721,7 +721,7 @@ export default function HomePage() {
                     </table>
                   </div>
 
-                  <div className="mt-4 flex justify-end">
+                  <div className="mt-4 flex flex-wrap items-center justify-end gap-4">
                     <div className="rounded-lg bg-gray-100 px-4 py-3 text-sm text-black">
                       <p>
                         <span className="font-semibold">Total Hours: </span>
@@ -736,8 +736,6 @@ export default function HomePage() {
                         {invoiceTotalAmount.toFixed(2)}
                       </p>
                     </div>
-                  </div>
-                  <div className="mt-4 flex justify-end">
                     <button
                       type="button"
                       onClick={generateInvoicePdf}
