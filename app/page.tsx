@@ -1,6 +1,12 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { supabase } from '@/lib/supabase';
 import { autoTable } from 'jspdf-autotable';
 import { jsPDF } from 'jspdf';
@@ -44,6 +50,13 @@ export default function HomePage() {
       }
     >
   >({});
+  const [reminderTime, setReminderTime] = useState('16:00');
+  const [reminderMessage, setReminderMessage] = useState('');
+  const [settingsId, setSettingsId] = useState<number | null>(null);
+  const [showReminderAlert, setShowReminderAlert] = useState(false);
+  const [reminderEmail, setReminderEmail] = useState('');
+  const [senderName, setSenderName] = useState('');
+  const [senderEmail, setSenderEmail] = useState('');
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
@@ -63,6 +76,7 @@ export default function HomePage() {
 
     return acc;
   }, {});
+
   const clientNames = Object.keys(monthlySummary);
 
   const invoiceClient = selectedClient || clientNames[0] || '';
@@ -198,6 +212,26 @@ export default function HomePage() {
     setClientsData(clientDetails);
   }
 
+  async function loadReminderSetting() {
+    const { data, error } = await supabase
+      .from('settings')
+      .select('id, reminder_time, reminder_email, sender_name, sender_email')
+      .order('id', { ascending: true })
+      .limit(1)
+      .single();
+
+    if (error) {
+      setReminderMessage(`Error loading reminder: ${error.message}`);
+      return;
+    }
+
+    setReminderTime(data.reminder_time);
+    setSettingsId(data.id);
+    setReminderEmail(data.reminder_email || '');
+    setSenderName(data.sender_name || '');
+    setSenderEmail(data.sender_email || '');
+  }
+
   useEffect(() => {
     let ignore = false;
 
@@ -218,6 +252,7 @@ export default function HomePage() {
 
       await loadClients();
       setLoadingEntries(false);
+      await loadReminderSetting();
     }
 
     fetchEntries();
@@ -226,6 +261,19 @@ export default function HomePage() {
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      const currentTime = now.toTimeString().slice(0, 5);
+
+      if (currentTime === reminderTime) {
+        setShowReminderAlert(true);
+      }
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [reminderTime]);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -357,6 +405,32 @@ export default function HomePage() {
     doc.save(`${safeClientName}-${safePeriod}-${invoiceData.number}.pdf`);
   }
 
+  async function saveReminderSetting() {
+    if (!settingsId) {
+      setReminderMessage('Settings row not found.');
+      return;
+    }
+
+    setReminderMessage('Saving reminder...');
+
+    const { error } = await supabase
+      .from('settings')
+      .update({
+        reminder_time: reminderTime,
+        reminder_email: reminderEmail,
+        sender_name: senderName,
+        sender_email: senderEmail,
+      })
+      .eq('id', settingsId);
+
+    if (error) {
+      setReminderMessage(`Error saving reminder: ${error.message}`);
+      return;
+    }
+
+    setReminderMessage('Reminder time saved.');
+  }
+
   return (
     <main className="min-h-screen bg-gray-50 p-8">
       <div className="mx-auto space-y-8 max-w-5xl">
@@ -464,7 +538,98 @@ export default function HomePage() {
 
         <div className="rounded-2xl bg-white p-8 shadow">
           <h2 className="mb-4 text-2xl font-bold text-black">Work Log</h2>
+          <div className="rounded-2xl bg-white p-8 shadow">
+            <h2 className="mb-4 text-2xl font-bold text-black">
+              Reminder Settings
+            </h2>
 
+            <p className="mb-4 text-sm text-gray-600">
+              Daily reminder is set for{' '}
+              <span className="font-medium text-black">{reminderTime}</span>.
+            </p>
+            {showReminderAlert && (
+              <div className="mt-4 rounded-xl border border-yellow-300 bg-yellow-50 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-black">Daily Reminder</p>
+                    <p className="text-sm text-gray-700">
+                      Don&apos;t forget to log today&apos;s completed work.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowReminderAlert(false)}
+                    className="rounded-lg bg-black px-3 py-2 text-sm text-white"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-black">
+                Reminder recipient email
+              </label>
+              <input
+                type="email"
+                value={reminderEmail}
+                onChange={(e) => setReminderEmail(e.target.value)}
+                placeholder="name@company.com"
+                className="w-full rounded-lg border border-gray-300 p-3 text-black"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-black">
+                Sender name
+              </label>
+              <input
+                type="text"
+                value={senderName}
+                onChange={(e) => setSenderName(e.target.value)}
+                placeholder="Work Log System"
+                className="w-full rounded-lg border border-gray-300 p-3 text-black"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-black">
+                Sender email
+              </label>
+              <input
+                type="email"
+                value={senderEmail}
+                onChange={(e) => setSenderEmail(e.target.value)}
+                placeholder="reminders@yourapp.com"
+                className="w-full rounded-lg border border-gray-300 p-3 text-black"
+              />
+            </div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-black">
+                  Daily reminder time
+                </label>
+                <input
+                  type="time"
+                  value={reminderTime}
+                  onChange={(e) => setReminderTime(e.target.value)}
+                  className="rounded-lg border border-gray-300 p-3 text-black"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={saveReminderSetting}
+                className="rounded-lg bg-black px-5 py-3 text-white"
+              >
+                Save Reminder Settings
+              </button>
+            </div>
+
+            {reminderMessage && (
+              <p className="mt-3 text-sm text-gray-700">{reminderMessage}</p>
+            )}
+          </div>
           <div className="rounded-2xl bg-white p-8 shadow">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-2xl font-bold text-black">Invoice Preview</h2>
