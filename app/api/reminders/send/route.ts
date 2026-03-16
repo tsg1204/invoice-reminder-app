@@ -56,8 +56,11 @@ export async function GET() {
       });
     }
 
-    const today = new Intl.DateTimeFormat('en-CA', {
+    const today = new Intl.DateTimeFormat('en-GB', {
       timeZone: 'America/New_York',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
     }).format(new Date());
 
     if (settings.last_reminder_sent === today) {
