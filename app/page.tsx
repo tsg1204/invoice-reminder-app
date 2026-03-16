@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  FormEvent,
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { autoTable } from 'jspdf-autotable';
 import { jsPDF } from 'jspdf';
