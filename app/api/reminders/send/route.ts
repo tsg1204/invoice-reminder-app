@@ -21,7 +21,9 @@ export async function GET() {
   try {
     const { data: settings, error } = await supabase
       .from('settings')
-      .select('id, reminder_time, reminder_email, sender_name, sender_email')
+      .select(
+        'id, reminder_time, reminder_email, sender_name, sender_email, last_reminder_sent',
+      )
       .order('id', { ascending: true })
       .limit(1)
       .single();
@@ -44,6 +46,27 @@ export async function GET() {
       );
     }
 
+    const now = new Date();
+    const currentTime = now.toTimeString().slice(0, 5);
+
+    if (currentTime !== settings.reminder_time) {
+      return NextResponse.json({
+        ok: true,
+        message: `Not time yet. Current time is ${currentTime}. Reminder time is ${settings.reminder_time}.`,
+      });
+    }
+
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York',
+    }).format(new Date());
+
+    if (settings.last_reminder_sent === today) {
+      return NextResponse.json({
+        ok: true,
+        message: 'Reminder already sent today.',
+      });
+    }
+
     const result = await transporter.sendMail({
       from: `${settings.sender_name} <${settings.sender_email}>`,
       to: settings.reminder_email,
@@ -55,6 +78,21 @@ export async function GET() {
         </div>
       `,
     });
+
+    const { error: updateError } = await supabase
+      .from('settings')
+      .update({ last_reminder_sent: today })
+      .eq('id', settings.id);
+
+    if (updateError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: `Email sent, but failed to save send date: ${updateError.message}`,
+        },
+        { status: 500 },
+      );
+    }
 
     return NextResponse.json({
       ok: true,
