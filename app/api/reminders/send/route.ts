@@ -26,6 +26,7 @@ export async function GET() {
       )
       .order('id', { ascending: true })
       .limit(1)
+      .eq('id', 1)
       .single();
 
     if (error || !settings) {
