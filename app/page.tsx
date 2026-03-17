@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { autoTable } from 'jspdf-autotable';
 import { jsPDF } from 'jspdf';
@@ -51,6 +52,9 @@ export default function HomePage() {
   const [reminderEmail, setReminderEmail] = useState('');
   const [senderName, setSenderName] = useState('');
   const [senderEmail, setSenderEmail] = useState('');
+  const [authReady, setAuthReady] = useState(false);
+
+  const router = useRouter();
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
@@ -227,6 +231,22 @@ export default function HomePage() {
   }
 
   useEffect(() => {
+    async function checkAuth() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.replace('/login');
+        return;
+      }
+      setAuthReady(true);
+    }
+    checkAuth();
+  }, [router]);
+
+  useEffect(() => {
+    if (!authReady) return;
+
     let ignore = false;
 
     async function fetchEntries() {
@@ -254,7 +274,7 @@ export default function HomePage() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [authReady]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -273,6 +293,15 @@ export default function HomePage() {
     e.preventDefault();
     setMessage('Saving...');
 
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setMessage('You must be logged in.');
+      return;
+    }
+
     const { error } = await supabase.from('work_logs').insert([
       {
         work_date: workDate,
@@ -281,10 +310,12 @@ export default function HomePage() {
         hours: Number(hours),
         notes,
         billable,
+        user_id: user.id,
       },
     ]);
 
     if (error) {
+      console.log('WORK_LOGS INSERT ERROR:', error);
       setMessage(`Error: ${error.message}`);
       return;
     }
@@ -425,8 +456,33 @@ export default function HomePage() {
     setReminderMessage('Reminder time saved.');
   }
 
+  if (!authReady) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gray-50">
+        <p className="text-gray-600">Loading…</p>
+      </main>
+    );
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.replace('/login');
+  }
+
   return (
     <main className="min-h-screen bg-gray-50 p-8">
+      <header className="mx-auto mb-6 flex max-w-5xl items-center justify-between">
+        <h2 className="text-lg font-semibold text-black">
+          Invoice / Work log
+        </h2>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="rounded-lg bg-black px-4 py-2 text-sm text-white"
+        >
+          Logout
+        </button>
+      </header>
       <div className="mx-auto space-y-8 max-w-5xl">
         <div className="rounded-2xl bg-white p-8 shadow">
           <h1 className="mb-2 text-3xl font-bold text-black">Daily Work Log</h1>
