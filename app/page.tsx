@@ -53,8 +53,38 @@ export default function HomePage() {
   const [senderName, setSenderName] = useState('');
   const [senderEmail, setSenderEmail] = useState('');
   const [authReady, setAuthReady] = useState(false);
+  const [workLogSortKey, setWorkLogSortKey] = useState<'date' | 'client'>('date');
+  const [workLogSortDir, setWorkLogSortDir] = useState<'asc' | 'desc'>('desc');
+  const [workLogPage, setWorkLogPage] = useState(1);
 
   const router = useRouter();
+
+  const WORK_LOG_PAGE_SIZE = 10;
+
+  const sortedEntries = [...entries].sort((a, b) => {
+    const mult = workLogSortDir === 'asc' ? 1 : -1;
+    if (workLogSortKey === 'date') {
+      return mult * (a.work_date.localeCompare(b.work_date));
+    }
+    return mult * a.client.localeCompare(b.client);
+  });
+
+  const totalWorkLogPages = Math.max(1, Math.ceil(sortedEntries.length / WORK_LOG_PAGE_SIZE));
+  const effectiveWorkLogPage = Math.min(workLogPage, totalWorkLogPages);
+  const paginatedEntries = sortedEntries.slice(
+    (effectiveWorkLogPage - 1) * WORK_LOG_PAGE_SIZE,
+    effectiveWorkLogPage * WORK_LOG_PAGE_SIZE,
+  );
+
+  function handleWorkLogSort(key: 'date' | 'client') {
+    if (key === workLogSortKey) {
+      setWorkLogSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setWorkLogSortKey(key);
+      setWorkLogSortDir(key === 'date' ? 'desc' : 'asc');
+    }
+    setWorkLogPage(1);
+  }
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
@@ -859,46 +889,108 @@ export default function HomePage() {
             )}
           </div>
 
-          {loadingEntries ? (
-            <p className="text-gray-600">Loading entries...</p>
-          ) : entries.length === 0 ? (
-            <p className="text-gray-600">No entries yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="px-3 py-2 text-left text-black">Date</th>
-                    <th className="px-3 py-2 text-left text-black">Client</th>
-                    <th className="px-3 py-2 text-left text-black">Task</th>
-                    <th className="px-3 py-2 text-left text-black">Hours</th>
-                    <th className="px-3 py-2 text-left text-black">Billable</th>
-                    <th className="px-3 py-2 text-left text-black">Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {entries.map((entry) => (
-                    <tr key={entry.id} className="border-b align-top">
-                      <td className="px-3 py-2 text-black">
-                        {entry.work_date}
-                      </td>
-                      <td className="px-3 py-2 text-black">{entry.client}</td>
-                      <td className="px-3 py-2 text-black">
-                        {entry.task_description}
-                      </td>
-                      <td className="px-3 py-2 text-black">{entry.hours}</td>
-                      <td className="px-3 py-2 text-black">
-                        {entry.billable ? 'Yes' : 'No'}
-                      </td>
-                      <td className="px-3 py-2 text-black">
-                        {entry.notes || '-'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="mt-12">
+            {loadingEntries ? (
+              <p className="text-gray-600">Loading entries...</p>
+            ) : entries.length === 0 ? (
+              <p className="text-gray-600">No entries yet.</p>
+            ) : (
+              <>
+                <div className="mb-4 flex justify-center">
+                  <nav
+                    className="flex items-center gap-2"
+                    aria-label="Work log pagination"
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setWorkLogPage((p) => Math.max(1, p - 1))
+                      }
+                      disabled={effectiveWorkLogPage <= 1}
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-3 py-2 text-sm text-black">
+                      Page {effectiveWorkLogPage} of {totalWorkLogPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setWorkLogPage((p) =>
+                          Math.min(totalWorkLogPages, p + 1),
+                        )
+                      }
+                      disabled={effectiveWorkLogPage >= totalWorkLogPages}
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </nav>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="px-3 py-2 text-left text-black">
+                          <button
+                            type="button"
+                            onClick={() => handleWorkLogSort('date')}
+                            className="flex items-center gap-1 font-medium hover:underline"
+                          >
+                            Date
+                            {workLogSortKey === 'date' &&
+                              (workLogSortDir === 'asc' ? ' ↑' : ' ↓')}
+                          </button>
+                        </th>
+                        <th className="px-3 py-2 text-left text-black">
+                          <button
+                            type="button"
+                            onClick={() => handleWorkLogSort('client')}
+                            className="flex items-center gap-1 font-medium hover:underline"
+                          >
+                            Client
+                            {workLogSortKey === 'client' &&
+                              (workLogSortDir === 'asc' ? ' ↑' : ' ↓')}
+                          </button>
+                        </th>
+                        <th className="px-3 py-2 text-left text-black">Task</th>
+                        <th className="px-3 py-2 text-left text-black">Hours</th>
+                        <th className="px-3 py-2 text-left text-black">
+                          Billable
+                        </th>
+                        <th className="px-3 py-2 text-left text-black">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedEntries.map((entry) => (
+                        <tr key={entry.id} className="border-b align-top">
+                          <td className="px-3 py-2 text-black">
+                            {entry.work_date}
+                          </td>
+                          <td className="px-3 py-2 text-black">
+                            {entry.client}
+                          </td>
+                          <td className="px-3 py-2 text-black">
+                            {entry.task_description}
+                          </td>
+                          <td className="px-3 py-2 text-black">
+                            {entry.hours}
+                          </td>
+                          <td className="px-3 py-2 text-black">
+                            {entry.billable ? 'Yes' : 'No'}
+                          </td>
+                          <td className="px-3 py-2 text-black">
+                            {entry.notes || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </main>
