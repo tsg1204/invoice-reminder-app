@@ -512,7 +512,7 @@ export default function HomePage() {
     <main className="min-h-screen bg-gray-50 p-8">
       <header className="mx-auto mb-6 flex max-w-5xl items-center justify-between">
         <h2 className="text-lg font-semibold text-black">
-          Invoice / Work log
+          Invoice Reminder System
         </h2>
         <button
           type="button"
