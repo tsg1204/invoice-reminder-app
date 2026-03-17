@@ -56,8 +56,17 @@ export default function HomePage() {
   const [workLogSortKey, setWorkLogSortKey] = useState<'date' | 'client'>('date');
   const [workLogSortDir, setWorkLogSortDir] = useState<'asc' | 'desc'>('desc');
   const [workLogPage, setWorkLogPage] = useState(1);
+  const [showScrollUp, setShowScrollUp] = useState(false);
 
   const router = useRouter();
+
+  useEffect(() => {
+    function onScroll() {
+      setShowScrollUp(window.scrollY > 300);
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const WORK_LOG_PAGE_SIZE = 10;
 
@@ -993,6 +1002,33 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {showScrollUp && (
+        <button
+          type="button"
+          onClick={() =>
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }
+          aria-label="Scroll to top"
+          className="fixed bottom-8 right-8 flex h-12 w-12 items-center justify-center rounded-full bg-black text-white shadow-lg transition hover:opacity-90"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M12 19V5" />
+            <path d="m5 12 7-7 7 7" />
+          </svg>
+        </button>
+      )}
     </main>
   );
 }
